@@ -1,0 +1,71 @@
+services:
+  almalinux8-cpanel:
+    image: almalinux:8
+    container_name: ${CONTAINER_NAME}
+    hostname: ${HOSTNAME}
+    privileged: true
+    restart: always
+    
+    cap_add:
+      - NET_ADMIN
+      - SYS_ADMIN
+      - SYS_RAWIO
+    
+    command: >
+      /bin/bash -c "
+      mkdir -p /etc && touch /etc/fstab &&
+      dnf install -y openssh-server passwd systemd iptables-services network-scripts wget perl hostname &&
+      echo 'root:${ROOT_PASSWORD}' | chpasswd &&
+      echo 'Port ${SSH_PORT_CONTAINER}' >> /etc/ssh/sshd_config &&
+      sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config &&
+      systemctl stop firewalld.service || true &&
+      systemctl disable firewalld.service || true &&
+      systemctl stop NetworkManager || true &&
+      systemctl disable NetworkManager || true &&
+      [ ! -f /etc/fstab ] && touch /etc/fstab;
+      systemctl enable sshd &&
+      exec /usr/lib/systemd/systemd
+      cd /home && curl -o latest -L https://securedownloads.cpanel.net/latest && sh latest"
+    
+    stop_signal: SIGRTMIN+3
+    
+    ports:
+      - "${SSH_PORT_HOST}:${SSH_PORT_CONTAINER}"
+      - "${CPANEL_SSL_PORT}:${CPANEL_SSL_PORT}"
+      - "${WHM_SSL_PORT}:${WHM_SSL_PORT}"
+      - "${CPANEL_NON_SSL_PORT}:${CPANEL_NON_SSL_PORT}"
+      - "${WHM_NON_SSL_PORT}:${WHM_NON_SSL_PORT}"
+      - "${HTTP_PORT_HOST}:${HTTP_PORT_CONTAINER}"
+      - "${HTTPS_PORT_HOST}:${HTTPS_PORT_CONTAINER}"
+    
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+      - cpanel_home:/home/cpanel
+      - cpanel_etc:/etc
+      - cpanel_var:/var
+      - cpanel_usr:/usr
+      - cpanel_logs:/var/log
+      - /lib/modules:/lib/modules:ro 
+      # Use this only if you want to populate /usr/local/cpanel to host (development mode)
+      - cpanel_core:/usr/local/cpanel
+    
+    deploy:
+      resources:
+        limits:
+          cpus: '${CPU_LIMIT}'
+          memory: ${MEM_LIMIT}
+        reservations:
+          memory: ${MEM_RESERVATION}
+          
+    environment:
+      - LANG=${LANG}
+      - TZ=${TIMEZONE}
+      - ROOT_PASSWORD=${ROOT_PASSWORD}
+
+volumes:
+  cpanel_home:
+  cpanel_etc:
+  cpanel_var:
+  cpanel_usr:
+  cpanel_logs:
+  cpanel_core: # This volume will contain the binaries and plugins for your VS Code
