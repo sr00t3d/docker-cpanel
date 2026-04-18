@@ -1,10 +1,12 @@
 services:
-  almalinux8-cpanel:
+  cpanel:
     image: almalinux:8
-    container_name: ${CONTAINER_NAME}
-    hostname: ${HOSTNAME}
+    container_name: devcp
+    hostname: devcp.perciocastelo.com.br
     privileged: true
-    restart: always
+    restart: unless-stopped
+    networks:
+      - cpanel-network
     
     cap_add:
       - NET_ADMIN
@@ -13,54 +15,55 @@ services:
     
     command: >
       /bin/bash -c "
-      mkdir -p /etc && touch /etc/fstab &&
-      dnf install -y openssh-server passwd systemd iptables-services network-scripts wget perl hostname &&
-      echo 'root:${ROOT_PASSWORD}' | chpasswd &&
-      echo 'Port ${SSH_PORT_CONTAINER}' >> /etc/ssh/sshd_config &&
-      sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config &&
-      systemctl stop firewalld.service || true &&
-      systemctl disable firewalld.service || true &&
-      systemctl stop NetworkManager || true &&
-      systemctl disable NetworkManager || true &&
-      [ ! -f /etc/fstab ] && touch /etc/fstab;
-      systemctl enable sshd &&
-      exec /usr/lib/systemd/systemd
-      cd /home && curl -o latest -L https://securedownloads.cpanel.net/latest && sh latest"
+      mkdir -p /etc /var/lib/dhcpd /var/log/cpanel-install /var/lib/rpm && 
+      touch /etc/fstab /var/lib/dhcpd/dhcpd.leases /var/lib/rpm/.rpm.lock &&
+      dnf install -y openssh-server passwd systemd iptables-services network-scripts wget perl hostname sudo curl tar gzip &&
+      echo root:devcp2026 | chpasswd &&
+      echo PermitRootLogin yes >> /etc/ssh/sshd_config &&
+      if [ ! -f /usr/local/cpanel/cpsrvd ]; then
+        cd /home && curl -o latest -L https://securedownloads.cpanel.net/latest &&
+        sh latest --force --skip-all-imunify --skip-wptoolkit --skip-systemd 2>&1 | tee /var/log/cpanel-install.log
+      fi &&
+      /usr/local/cpanel/cpsrvd
+      "
     
     stop_signal: SIGRTMIN+3
     
     ports:
-      - "${SSH_PORT_HOST}:${SSH_PORT_CONTAINER}"
-      - "${CPANEL_SSL_PORT}:${CPANEL_SSL_PORT}"
-      - "${WHM_SSL_PORT}:${WHM_SSL_PORT}"
-      - "${CPANEL_NON_SSL_PORT}:${CPANEL_NON_SSL_PORT}"
-      - "${WHM_NON_SSL_PORT}:${WHM_NON_SSL_PORT}"
-      - "${HTTP_PORT_HOST}:${HTTP_PORT_CONTAINER}"
-      - "${HTTPS_PORT_HOST}:${HTTPS_PORT_CONTAINER}"
+      - "22028:22"
+      - "2083:2083"
+      - "2082:2082"
+      - "2087:2087"
+      - "2086:2086"
+      - "8091:80"
+      - "8447:443"
     
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
       - cpanel_home:/home/cpanel
       - cpanel_etc:/etc
       - cpanel_var:/var
-      - cpanel_usr:/usr
+      - cpanel_usr:/usr/local/cpanel
       - cpanel_logs:/var/log
-      - /lib/modules:/lib/modules:ro 
-      # Use this only if you want to populate /usr/local/cpanel to host (development mode)
-      - cpanel_core:/usr/local/cpanel
+      - cpanel_opt:/opt
+      - /lib/modules:/lib/modules:ro
     
-    deploy:
-      resources:
-        limits:
-          cpus: '${CPU_LIMIT}'
-          memory: ${MEM_LIMIT}
-        reservations:
-          memory: ${MEM_RESERVATION}
-          
     environment:
-      - LANG=${LANG}
-      - TZ=${TIMEZONE}
-      - ROOT_PASSWORD=${ROOT_PASSWORD}
+      - LANG=C.utf8
+      - TZ=America/Sao_Paulo
+      - container=docker
+      - PHP_INI=production
+
+    healthcheck:
+      test: ["CMD", "curl", "-kf", "https://localhost:2083/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+
+networks:
+  cpanel-network:
+    driver: bridge
 
 volumes:
   cpanel_home:
@@ -68,4 +71,4 @@ volumes:
   cpanel_var:
   cpanel_usr:
   cpanel_logs:
-  cpanel_core: # This volume will contain the binaries and plugins for your VS Code
+  cpanel_opt:
