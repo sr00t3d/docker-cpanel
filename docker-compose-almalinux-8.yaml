@@ -1,59 +1,95 @@
+# ==============================================================================
+# cPanel Docker
+# ==============================================================================
+
 services:
   cpanel:
+    # Imagem base - AlmaLinux 8 é recomendada pelo cPanel
     image: almalinux:8
-    container_name: devcp
-    hostname: devcp.perciocastelo.com.br
+    
+    # Nome do container
+    container_name: ${CONTAINER_NAME}
+    
+    # Hostname do servidor
+    hostname: ${HOSTNAME}
+    
+    # Modo privilegiado necessário para cPanel
     privileged: true
+    
+    # Reiniciar automaticamente se parar
     restart: unless-stopped
-    networks:
-      - cpanel-network
     
+    # Capacidades necessárias para cPanel
     cap_add:
-      - NET_ADMIN
-      - SYS_ADMIN
-      - SYS_RAWIO
+      - NET_ADMIN      # Para configurações de rede
+      - SYS_ADMIN      # Para operações de sistema
+      - SYS_RAWIO      # Para acesso a dispositivos
     
+    # Comando de inicialização
+    # - Configura ambiente básico
+    # - Instala dependências se necessário
+    # - Instala cPanel se não existir
+    # - Inicia o serviço cpsrvd
     command: >
       /bin/bash -c "
       mkdir -p /etc /var/lib/dhcpd /var/log/cpanel-install /var/lib/rpm && 
       touch /etc/fstab /var/lib/dhcpd/dhcpd.leases /var/lib/rpm/.rpm.lock &&
       dnf install -y openssh-server passwd systemd iptables-services network-scripts wget perl hostname sudo curl tar gzip &&
-      echo root:devcp2026 | chpasswd &&
-      echo PermitRootLogin yes >> /etc/ssh/sshd_config &&
-      if [ ! -f /usr/local/cpanel/cpsrvd ]; then
+      echo root: | chpasswd &&
+      sed -i s/#PermitRootLogin.*/PermitRootLogin yes/ /etc/ssh/sshd_config &&
+      if [ -f /usr/local/cpanel/cpsrvd ]; then
+        exec /usr/local/cpanel/cpsrvd
+      else
         cd /home && curl -o latest -L https://securedownloads.cpanel.net/latest &&
         sh latest --force --skip-all-imunify --skip-wptoolkit --skip-systemd 2>&1 | tee /var/log/cpanel-install.log
-      fi &&
-      /usr/local/cpanel/cpsrvd
+      fi
       "
     
+    # Signal para stop graceful
     stop_signal: SIGRTMIN+3
     
+    # Portas expostas
     ports:
-      - "22028:22"
-      - "2083:2083"
-      - "2082:2082"
-      - "2087:2087"
-      - "2086:2086"
-      - "8091:80"
-      - "8447:443"
+      - "${SSH_PORT_HOST:-22028}:${SSH_PORT_CONTAINER:-22}"    # SSH
+      - "${CPANEL_SSL_PORT:-2083}:${CPANEL_SSL_PORT:-2083}"    # cPanel SSL
+      - "${CPANEL_NON_SSL_PORT:-2082}:${CPANEL_NON_SSL_PORT:-2082}"  # cPanel
+      - "${WHM_SSL_PORT:-2087}:${WHM_SSL_PORT:-2087}"           # WHM SSL
+      - "${WHM_NON_SSL_PORT:-2086}:${WHM_NON_SSL_PORT:-2086}"  # WHM
+      - "${HTTP_PORT_HOST:-8091}:${HTTP_PORT_CONTAINER:-80}"   # HTTP
+      - "${HTTPS_PORT_HOST:-8447}:${HTTPS_PORT_CONTAINER:-443}"   # HTTPS
     
+    # Volumes para persistência
     volumes:
+      # systemd requirements
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
-      - cpanel_home:/home/cpanel
-      - cpanel_etc:/etc
-      - cpanel_var:/var
-      - cpanel_usr:/usr/local/cpanel
-      - cpanel_logs:/var/log
-      - cpanel_opt:/opt
+      
+      # cPanel directories
+      - cpanel_home:/home/cpanel           # Home dos usuários
+      - cpanel_etc:/etc                     # Configurações
+      - cpanel_var:/var                     # Dados variáveis
+      - cpanel_usr:/usr/local/cpanel       # Instalação cPanel
+      - cpanel_logs:/var/log               # Logs
+      - cpanel_opt:/opt                     # diretório opt
+      
+      # Kernel modules (necessário para algumas funcionalidades)
       - /lib/modules:/lib/modules:ro
     
+    # Variáveis de ambiente
     environment:
-      - LANG=C.utf8
-      - TZ=America/Sao_Paulo
+      - LANG=${LANG:-C.utf8}
+      - TZ=${TIMEZONE:-America/Sao_Paulo}
       - container=docker
-      - PHP_INI=production
-
+    
+    # Limites de recursos
+    deploy:
+      resources:
+        limits:
+          cpus: ${CPU_LIMIT:-2.0}
+          memory: ${MEM_LIMIT:-4G}
+        reservations:
+          memory: ${MEM_RESERVATION:-2G}
+    
+    # Healthcheck para monitorar o serviço
     healthcheck:
       test: ["CMD", "curl", "-kf", "https://localhost:2083/"]
       interval: 30s
@@ -61,14 +97,16 @@ services:
       retries: 3
       start_period: 120s
 
+# Rede isolada para o container
 networks:
   cpanel-network:
     driver: bridge
 
+# Volumes para persistência de dados
 volumes:
-  cpanel_home:
-  cpanel_etc:
-  cpanel_var:
-  cpanel_usr:
-  cpanel_logs:
-  cpanel_opt:
+  cpanel_home:      # /home/cpanel - arquivos dos usuários
+  cpanel_etc:       # /etc - configurações do sistema
+  cpanel_var:       # /var - dados variáveis
+  cpanel_usr:       # /usr/local/cpanel - instalação principal
+  cpanel_logs:      # /var/log - logs do sistema
+  cpanel_opt:       # /opt - diretório opcional
