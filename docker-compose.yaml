@@ -36,7 +36,7 @@ services:
       touch /etc/fstab /var/lib/dhcpd/dhcpd.leases /var/lib/rpm/.rpm.lock &&
       dnf install -y openssh-server passwd systemd iptables-services network-scripts wget perl hostname sudo curl tar gzip &&
       echo root: | chpasswd &&
-      sed -i s/#PermitRootLogin.*/PermitRootLogin yes/ /etc/ssh/sshd_config &&
+      sed -i 's/#PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config &&
       if [ -f /usr/local/cpanel/cpsrvd ]; then
         exec /usr/local/cpanel/cpsrvd
       else
