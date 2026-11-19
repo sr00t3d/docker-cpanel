@@ -25,26 +25,9 @@ services:
       - SYS_ADMIN      # Para operações de sistema
       - SYS_RAWIO      # Para acesso a dispositivos
     
-    # Comando de inicialização
-    # - Configura ambiente básico
-    # - Instala dependências se necessário
-    # - Instala cPanel se não existir
-    # - Inicia o serviço cpsrvd
-    command: >
-      /bin/bash -c "
-      mkdir -p /etc /var/lib/dhcpd /var/log/cpanel-install /var/lib/rpm && 
-      touch /etc/fstab /var/lib/dhcpd/dhcpd.leases /var/lib/rpm/.rpm.lock &&
-      dnf install -y openssh-server passwd systemd iptables-services network-scripts wget perl hostname sudo curl tar gzip &&
-      echo root: | chpasswd &&
-      sed -i 's/#PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config &&
-      if [ -f /usr/local/cpanel/cpsrvd ]; then
-        exec /usr/local/cpanel/cpsrvd
-      else
-        cd /home && curl -o latest -L https://securedownloads.cpanel.net/latest &&
-        sh latest --force --skip-all-imunify --skip-wptoolkit --skip-systemd 2>&1 | tee /var/log/cpanel-install.log
-      fi
-      "
-    
+    # Entrypoint unico (substitui o command inline divergente)
+    entrypoint: ["/bin/bash", "/entrypoint.sh"]
+
     # Signal para stop graceful
     stop_signal: SIGRTMIN+3
     
@@ -62,6 +45,7 @@ services:
     volumes:
       # systemd requirements
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
+      - ./docker/entrypoint.sh:/entrypoint.sh:ro
       
       # cPanel directories
       - cpanel_home:/home/cpanel           # Home dos usuários
@@ -79,6 +63,8 @@ services:
       - LANG=${LANG:-C.utf8}
       - TZ=${TIMEZONE:-America/Sao_Paulo}
       - container=docker
+      - ROOT_PASSWORD=${ROOT_PASSWORD}
+      - SSH_ROOT_LOGIN=${SSH_ROOT_LOGIN:-no}
     
     # Limites de recursos
     deploy:
@@ -91,7 +77,7 @@ services:
     
     # Healthcheck para monitorar o serviço
     healthcheck:
-      test: ["CMD", "curl", "-kf", "https://localhost:2083/"]
+      test: ["CMD-SHELL", "curl -kfsS https://localhost:2087/ >/dev/null 2>&1 || curl -kfsS https://localhost:2083/ >/dev/null 2>&1"]
       interval: 30s
       timeout: 10s
       retries: 3

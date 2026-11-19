@@ -33,13 +33,14 @@ ROOT_PASSWORD=YourStrongPasswordHere
 
 # --- Networks and Access ---
 SSH_PORT_HOST=22028
-SSH_PORT_CONTAINER=22028
+SSH_PORT_CONTAINER=22
+SSH_ROOT_LOGIN=no
 CPANEL_SSL_PORT=2083
 CPANEL_NON_SSL_PORT=2082
 WHM_SSL_PORT=2087
 WHM_NON_SSL_PORT=2086
-HTTP_PORT_HOST=8080
-HTTPS_PORT_HOST=8443
+HTTP_PORT_HOST=8091
+HTTPS_PORT_HOST=8447
 HTTP_PORT_CONTAINER=80
 HTTPS_PORT_CONTAINER=443
 
@@ -118,4 +119,4 @@ https://perciocastelo.com.br/blog/installing-cpanel-in-docker.html
 
 ## License
 
-This project is licensed under the **GNU General Public License v3.0**. See the **LICENSE** file for more details.
+This project is licensed under the **Apache License 2.0**. See the **LICENSE** file for more details.

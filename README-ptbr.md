@@ -29,17 +29,18 @@ Você também pode ajustar o mapeamento de portas e recursos de hardware. Por pa
 # --- Identification ---
 CONTAINER_NAME=cpanel-server
 HOSTNAME=srv.seudominio.com.br
-ROOT_PASSWORD=SuaSenhaForteAqui
+ROOT_PASSWORD=TROQUE_ESTA_SENHA
 
 # --- Networks and Access ---
 SSH_PORT_HOST=22028
-SSH_PORT_CONTAINER=22028
+SSH_PORT_CONTAINER=22
+SSH_ROOT_LOGIN=no
 CPANEL_SSL_PORT=2083
 CPANEL_NON_SSL_PORT=2082
 WHM_SSL_PORT=2087
 WHM_NON_SSL_PORT=2086
-HTTP_PORT_HOST=8080
-HTTPS_PORT_HOST=8443
+HTTP_PORT_HOST=8091
+HTTPS_PORT_HOST=8447
 HTTP_PORT_CONTAINER=80
 HTTPS_PORT_CONTAINER=443
 
@@ -99,7 +100,7 @@ ln -s /var/lib/docker/volumes/NOME_DO_DIRETORIO_cpanel_core/_data /home/cpanel/d
 
 ## Avisos de Segurança
 
-* **Modo Privilegiado:** Este container roda com `privileged: true`. Este setup é desenhado estritamente para **ambientes de desenvolvimento e testes de integração**. Não exponha este container diretamente em produção sem camadas de proxy reverso e hardening agressivo no Host.
+* **Modo Privilegiado:** Este container roda com `privileged: true`. Este setup é desenhado estritamente para **ambientes de desenvolvimento e testes de integração**. NÃO use em produção sem hardening: o cPanel em Docker não é suportado pela cPanel Inc., exige licença paga e roda em modo privilegiado. Use somente em lab/desenvolvimento atrás de proxy reverso.
 * **Senhas:** Altere o `ROOT_PASSWORD` padrão assim que acessar o WHM na porta `2087` pela primeira vez.
 
 ## Aviso Legal
@@ -115,4 +116,4 @@ Para um guia completo passo a passo, confira meu artigo completo:
 
 ## Licença
 
-Este projeto é licenciado sob a **GNU General Public License v3.0**. Consulte o arquivo **LICENSE** para mais detalhes.
+Este projeto é licenciado sob a **Apache License 2.0**. Consulte o arquivo **LICENSE** para mais detalhes.
