@@ -1,35 +1,36 @@
-# 🐳 cPanel Dev Environment (AlmaLinux 8 on Docker)
+# cPanel Dev Environment (AlmaLinux 8 on Docker)
 
-Read me: [BR](README-ptbr.md)
+🇺🇸 **English** | 🇧🇷 [Português (BR)](README-ptbr.md) | 🇪🇸 [Español](README-es.md)
 
-![License](https://img.shields.io/github/license/sr00t3d/dbsearch) ![Docker Script](https://img.shields.io/badge/language-Docker-green.svg)
+[![License](https://img.shields.io/badge/license-Apache--2.0-green.svg)](LICENSE) [![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)](https://github.com/sr00t3d/docker-cpanel/releases) [![Base](https://img.shields.io/badge/base-AlmaLinux%208-orange.svg)](docker-compose.yaml) [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED.svg)](docker-compose.yaml)
 
-<img width="700" src="docker-cpanel-cover.webp" />
+![Docker cPanel Cover](docker-cpanel-cover.webp)
 
-This repository provides a robust infrastructure to run a full **cPanel & WHM** instance inside a Docker container using AlmaLinux 8.
+This repository provides a reproducible infrastructure to run a full **cPanel & WHM** instance inside a Docker container using **AlmaLinux 8**.
 
-The architecture was specifically designed for **plugin development and integration testing**, solving common boot issues with `systemd`, log file locks caused by storage drivers (such as `overlay2`), and data persistence.
+The architecture is designed specifically for **plugin development and integration testing**, solving common container boot issues with `systemd`, log file locks caused by storage drivers (`overlay2`), NAT/license synchronization, and data persistence.
 
 ## Main Features
 
-* **Isolation and Persistence:** Uses named volumes to ensure that no configuration or installation is lost when recreating the container.
-* **systemd Ready:** The container is started in privileged mode (`privileged: true`) with the required `capabilities` (`NET_ADMIN`, `SYS_ADMIN`, `SYS_RAWIO`) for managing internal services.
-* **Automatic Mocking:** The startup script dynamically creates `/etc/fstab` and injects basic dependencies (`wget`, `perl`, `network-scripts`) before boot, preventing failures in the cPanel installer.
-* **Core Mirroring:** The `cpanel_core` volume captures the `/usr/local/cpanel` directory, allowing the creation of *symlinks* on the Host for real-time code editing via VS Code.
+- **Isolation and Persistence:** uses Docker named volumes (`cpanel_home`, `cpanel_etc`, `cpanel_var`, `cpanel_usr`, `cpanel_logs`, `cpanel_opt`) so configuration and installation state survive container recreation.
+- **systemd Ready:** runs with `privileged: true`, `SIGRTMIN+3` graceful stop signal, cgroup mount, and explicit Linux capabilities (`NET_ADMIN`, `SYS_ADMIN`, `SYS_RAWIO`).
+- **Unified Entrypoint (`docker/entrypoint.sh`):** dynamically prepares `/etc/fstab`, injects base dependencies (`wget`, `perl`, `network-scripts`), secures root/SSH settings (`SSH_ROOT_LOGIN=no` by default), and handles NAT/license sync.
+- **Built-in Healthcheck:** monitors WHM (`:2087`) and cPanel (`:2083`) HTTPS availability automatically.
+- **Real-Time Core Editing:** the `cpanel_usr` named volume maps `/usr/local/cpanel`, allowing host-side symlinks for instant plugin development in VS Code without `docker cp`.
 
 ## Initial Configuration
 
-Before starting the environment, rename or create the `.env` file at the root of the project with your settings. The file allows you to customize the machine identification, such as the `HOSTNAME` and the root password (`ROOT_PASSWORD`).
+Copy `.env.example` to `.env` and customize your hostname, ports, resource limits, and strong `ROOT_PASSWORD`:
 
-You can also adjust port mappings and hardware resources. By default, the host HTTP port (`8080`) is mapped to the container port `80`.
-
-**Example `.env`:**
+```bash
+cp .env.example .env
+```
 
 ```env
 # --- Identification ---
 CONTAINER_NAME=cpanel-server
-HOSTNAME=srv.seudominio.com.br
-ROOT_PASSWORD=YourStrongPasswordHere
+HOSTNAME=srv.example.com
+ROOT_PASSWORD=ChangeThisStrongPassword!
 
 # --- Networks and Access ---
 SSH_PORT_HOST=22028
@@ -44,7 +45,7 @@ HTTPS_PORT_HOST=8447
 HTTP_PORT_CONTAINER=80
 HTTPS_PORT_CONTAINER=443
 
-# --- Features (Recommended for cPanel) ---
+# --- Resources (Recommended for cPanel) ---
 CPU_LIMIT=2.0
 MEM_LIMIT=4G
 MEM_RESERVATION=2G
@@ -54,69 +55,45 @@ TIMEZONE=America/Sao_Paulo
 LANG=C.utf8
 ```
 
-## How to Start and Install
-
-1. **Start the Container:**
-
-Run Compose in the background. Docker will create the network structure and volumes based on `almalinux:8`.
+## How to Start
 
 ```bash
-docker-compose up -d
+# Validate compose configuration
+docker compose config --quiet
+
+# Start container in background
+docker compose up -d
+
+# Check container status & healthcheck
+docker compose ps
 ```
 
-## Optional
-
-### **Run the cPanel Installation:**
-
-The base image already triggers the cPanel installer when the container starts, but if you want to reinstall with the container already running:
+### Optional Manual Reinstall of cPanel
 
 ```bash
 docker exec -it cpanel-server bash -c "cd /home && curl -o latest -L https://securedownloads.cpanel.net/latest && sh latest"
 ```
 
-*Note: The installation process may take from 15 to 45 minutes depending on the allocated resources.*
+*Note: Initial cPanel installation typically takes 15 to 45 minutes depending on CPU, RAM, and network speed.*
 
 ## Development Workflow (Real-Time Editing)
 
-If you are developing plugins for cPanel, you can connect your IDE (such as VS Code) directly to the container files using the Host as a bridge, without needing manual `docker cp` commands.
-
-The `docker-compose.yaml` already configures a named volume called `cpanel_core` that physically stores the installation at `/usr/local/cpanel`.
-
-To edit the files continuously:
-
-1. Create a development folder on your Host:
+Because `docker-compose.yaml` stores `/usr/local/cpanel` in the `cpanel_usr` named volume, you can symlink it on the host for live IDE editing:
 
 ```bash
 mkdir -p /home/cpanel/dev
+ln -s /var/lib/docker/volumes/<project_dir>_cpanel_usr/_data /home/cpanel/dev/core
 ```
 
-## Optional (if you mapped /usr/local/cpanel)
+## Security Notice
 
-Create a *Symbolic Link* on the Host pointing to the real volume managed by Docker (adjust the prefix name according to your project directory):
-
-```bash
-ln -s /var/lib/docker/volumes/NOME_DO_DIRETORIO_cpanel_core/_data /home/cpanel/dev/core
-```
-
-3. Open the `/home/cpanel/dev` folder in VS Code. Any changes made here will reflect **instantly** inside the container.
-
-## Security Warnings
-
-* **Privileged Mode:** This container runs with `privileged: true`. This setup is designed strictly for **development and integration testing environments**. Do not expose this container directly in production without reverse proxy layers and aggressive host hardening.
-* **Passwords:** Change the default `ROOT_PASSWORD` as soon as you access WHM on port `2087` for the first time.
-
-## Legal Notice
-
-> [!WARNING]
-> This software is provided “as is”. Always ensure you have explicit permission before running it. The author is not responsible for any misuse, legal consequences, or data impact caused by this tool.
+- **Lab / Development Only:** this container runs with `privileged: true` for `systemd` compatibility. Do **not** expose it directly to production traffic; cPanel inside Docker is unsupported by cPanel Inc. and requires a valid license.
+- **Rotate Credentials:** change `ROOT_PASSWORD` immediately on first WHM login (`https://<host>:2087`).
 
 ## Detailed Tutorial
 
-For a complete step-by-step guide, check out my full article:
-
-👉 **Installing cPanel on Docker**  
-https://perciocastelo.com.br/blog/installing-cpanel-in-docker.html
+Read the full step-by-step guide: [Installing cPanel in Docker](https://perciocastelo.com.br/blog/installing-cpanel-in-docker.html)
 
 ## License
 
-This project is licensed under the **Apache License 2.0**. See the **LICENSE** file for more details.
+Licensed under the [Apache License 2.0](LICENSE).
