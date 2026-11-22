@@ -19,18 +19,19 @@ services:
     # Reiniciar automaticamente se parar
     restart: unless-stopped
     
+    # Cgroup host para systemd v2 e signal gracioso
+    cgroup: host
+    stop_signal: SIGRTMIN+3
+    
     # Capacidades necessárias para cPanel
     cap_add:
       - NET_ADMIN      # Para configurações de rede
       - SYS_ADMIN      # Para operações de sistema
       - SYS_RAWIO      # Para acesso a dispositivos
     
-    # Entrypoint unico (substitui o command inline divergente)
+    # Entrypoint que prepara o ambiente e entrega PID 1 para o systemd (/usr/sbin/init)
     entrypoint: ["/bin/bash", "/entrypoint.sh"]
 
-    # Signal para stop graceful
-    stop_signal: SIGRTMIN+3
-    
     # Portas expostas
     ports:
       - "${SSH_PORT_HOST:-22028}:${SSH_PORT_CONTAINER:-22}"    # SSH
@@ -41,10 +42,16 @@ services:
       - "${HTTP_PORT_HOST:-8091}:${HTTP_PORT_CONTAINER:-80}"   # HTTP
       - "${HTTPS_PORT_HOST:-8447}:${HTTPS_PORT_CONTAINER:-443}"   # HTTPS
     
+    # Tmpfs exigidos pelo systemd para operar em container
+    tmpfs:
+      - /run
+      - /run/lock
+      - /tmp
+
     # Volumes para persistência
     volumes:
-      # systemd requirements
-      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+      # systemd requirements (cgroup rw no cgroups v2)
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
       - ./docker/entrypoint.sh:/entrypoint.sh:ro
       
       # cPanel directories
