@@ -6,8 +6,8 @@ log() { echo "[cpanel-entrypoint] $*"; }
 log "Iniciando container cPanel dev-lab ($(date -Is))"
 
 # --- Pre-requisitos de boot (systemd / fstab / diretorios) ---
-mkdir -p /etc /var/lib/dhcpd /var/log/cpanel-install /var/lib/rpm /usr/local/cpanel/logs /etc/systemd/system
-touch /etc/fstab /var/lib/dhcpd/dhcpd.leases /var/lib/rpm/.rpm.lock 2>/dev/null || true
+mkdir -p /etc /var/lib/dhcpd /var/log/cpanel-install /var/lib/rpm /usr/local/cpanel/logs /etc/systemd/system /var/cpanel/activate /var/cpanel/analytics
+touch /etc/fstab /etc/.whostmgrft /var/lib/dhcpd/dhcpd.leases /var/lib/rpm/.rpm.lock 2>/dev/null || true
 touch /usr/local/cpanel/logs/error_log /usr/local/cpanel/logs/access_log 2>/dev/null || true
 
 # --- Resolver conflito de coreutils-single do AlmaLinux minimal ---
@@ -99,27 +99,25 @@ if [ ! -f /home/latest ]; then
 fi
 
 echo "[cPanel First Boot] Executando ./latest com systemd ativo..."
-if ./latest --force --skip-all-imunify --skip-wptoolkit 2>&1 | tee /var/log/cpanel-install.log; then
-  echo "[cPanel First Boot] Instalacao concluida com sucesso!"
-  /usr/local/cpanel/scripts/build_cpnat || true
-  /usr/local/cpanel/cpkeyclt || true
-  systemctl enable --now cpanel.service mariadb.service named.service || true
-  touch /etc/.whostmgrft
-  mkdir -p /var/cpanel/activate /var/cpanel/analytics
-  touch /var/cpanel/activate/2026-05.v01.GDPR.CPWHMEULA
+./latest --force --skip-all-imunify --skip-wptoolkit 2>&1 | tee /var/log/cpanel-install.log || true
+
+echo "[cPanel First Boot] Finalizando ajustes pos-instalacao..."
+/usr/local/cpanel/scripts/build_cpnat || true
+/usr/local/cpanel/cpkeyclt || true
+
+# Aceitar EULA e marcar assistente inicial como concluido (evita loop no initial_setup_wizard)
+touch /etc/.whostmgrft
+mkdir -p /var/cpanel/activate /var/cpanel/analytics
+touch /var/cpanel/activate/2026-05.v01.GDPR.CPWHMEULA
+if [ -x /usr/local/cpanel/3rdparty/bin/perl ]; then
   /usr/local/cpanel/3rdparty/bin/perl -MWhostmgr::Setup::Completed -MWhostmgr::Setup::EULA -e '
     eval { Whostmgr::Setup::EULA::set_accepted(user => "root", remote_ip => "127.0.0.1"); };
     eval { Whostmgr::Setup::Completed::set_complete(); };
   ' 2>/dev/null || true
-  echo "[cPanel First Boot] cPanel e servicos ativos no systemd."
-else
-  echo "[cPanel First Boot] AVISO: Instalador finalizou. Verificando cpsrvd..."
-  if [ -x /usr/local/cpanel/cpsrvd ]; then
-    /usr/local/cpanel/scripts/build_cpnat || true
-    /usr/local/cpanel/cpkeyclt || true
-    systemctl enable --now cpanel.service || true
-  fi
 fi
+
+systemctl enable --now cpanel.service mariadb.service named.service || true
+echo "[cPanel First Boot] cPanel e servicos ativos no systemd com wizard ignorado."
 INSTALLSH
 chmod +x /docker-install.sh
 
