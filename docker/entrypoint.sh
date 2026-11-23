@@ -48,6 +48,15 @@ if [ -x /usr/local/cpanel/cpsrvd ]; then
   # Habilita servicos no systemd se ainda nao habilitados
   systemctl --root=/ enable cpanel.service mariadb.service named.service 2>/dev/null || true
 
+  # Aceitar EULA e marcar assistente inicial como concluido (evita loop no initial_setup_wizard)
+  touch /etc/.whostmgrft
+  mkdir -p /var/cpanel/activate /var/cpanel/analytics
+  touch /var/cpanel/activate/2026-05.v01.GDPR.CPWHMEULA
+  /usr/local/cpanel/3rdparty/bin/perl -MWhostmgr::Setup::Completed -MWhostmgr::Setup::EULA -e '
+    eval { Whostmgr::Setup::EULA::set_accepted(user => "root", remote_ip => "127.0.0.1"); };
+    eval { Whostmgr::Setup::Completed::set_complete(); };
+  ' 2>/dev/null || true
+
   log "Iniciando systemd como PID 1..."
   exec /usr/sbin/init
 fi
@@ -95,6 +104,13 @@ if ./latest --force --skip-all-imunify --skip-wptoolkit 2>&1 | tee /var/log/cpan
   /usr/local/cpanel/scripts/build_cpnat || true
   /usr/local/cpanel/cpkeyclt || true
   systemctl enable --now cpanel.service mariadb.service named.service || true
+  touch /etc/.whostmgrft
+  mkdir -p /var/cpanel/activate /var/cpanel/analytics
+  touch /var/cpanel/activate/2026-05.v01.GDPR.CPWHMEULA
+  /usr/local/cpanel/3rdparty/bin/perl -MWhostmgr::Setup::Completed -MWhostmgr::Setup::EULA -e '
+    eval { Whostmgr::Setup::EULA::set_accepted(user => "root", remote_ip => "127.0.0.1"); };
+    eval { Whostmgr::Setup::Completed::set_complete(); };
+  ' 2>/dev/null || true
   echo "[cPanel First Boot] cPanel e servicos ativos no systemd."
 else
   echo "[cPanel First Boot] AVISO: Instalador finalizou. Verificando cpsrvd..."
